@@ -1,11 +1,14 @@
-// ********************************************************************
+// **************************************************************************
+//
 // Pool controller 
+// ===============
 //
 // The pump is running for a time = T/2 except in wintering mode when T/3.
 // Below an air temperature of 1°C , the pump is running to avoid freezing.
 // 
 // The running time is dispached in 6 hours period
-/********************************************************************/
+//
+// **************************************************************************
 
 // First we include the needed libraries
 
@@ -19,32 +22,27 @@
 
 // MAC address of the shield (must be unique)
 byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xA5, 0x7E };
+
 // Static IP address of the shield (will be used if DHCP not working)
 IPAddress ip(192,168,0,143);
 
-// Initialize the server
-// Listening on port 4200
-
+// Initialize the server (Listening on port 4200)
 EthernetServer serveur(4200);
 
 // Pin connections
-
-#define ONE_WIRE_BUS  7      // Temperature data wire is plugged into pin 7 on the Arduino 
+#define ONE_WIRE_BUS  7      // pin 7 for Temperature data wire
 #define PUMP_RELAY 2         // Pin 2 for pump relay
 #define ELECTROLYSE_RELAY 3  // Pin 3 for electrolysis relay
 #define PH_RELAY 4           // Pin 4 for ph relay
 
 // DS18B20 temperature sensor setting
 // Setup a oneWire instance to communicate with any OneWire devices  
-
 OneWire oneWire(ONE_WIRE_BUS); 
 
 // Pass our oneWire reference to Dallas Temperature
-
 DallasTemperature sensors(&oneWire);
 
 // Variables and constants
-
 const char* RELAY[3] = { "PUMP_RELAY", "ELECTROLYSE_RELAY", "PH_RELAY" };
 const char* STATUS[2] = {"Stopped", "Running"};
 
@@ -53,18 +51,18 @@ const char* STATUS[2] = {"Stopped", "Running"};
 
 #define FROST_TEMPERATURE 1.0
 #define MAX_WINTERING_TEMPERATURE 12.0
-#define MIN_ELECTROLYSIS_TEMPERATURE 18.0
-#define MIN_PH_METER_TEMPERATURE 17.0
+#define MIN_ELECTROLYSIS_TEMPERATURE 15.0
+#define MIN_PH_METER_TEMPERATURE 13.0
 
-#define TEMPERATURE_REPORT_INTERVAL 60000         // 1 minute interval
+#define TEMPERATURE_REPORT_INTERVAL 60000          // 1 minute interval
 #define TEMPERATURE_MEASUREMENT_INTERVAL 10000     // measurement every 10s
 
 #define MS_DAY  86400000
 #define MS_HOUR 3600000
-#define NPERIODS 960                              // number of periods for filtration during 24h
+#define NPERIODS 960                               // number of periods for filtration during 24h
 
-float temperature=0.0;   // temperature de l'eau
-float air_temperature=0.0; // temperature de l'air exterieur
+float temperature=0.0;                             // temperature de l'eau
+float air_temperature=0.0;                         // temperature de l'air exterieur
 
 float sum_of_temperature=0.0;
 unsigned int temperature_count=0;
@@ -78,15 +76,12 @@ unsigned long previous_time_of_the_day=0;  // store the pseudo starting time of 
 unsigned long operating_time;
 long period_count=1;
 
-// flags
-
-bool frost_protection=false;       // Should we protect against freezing
-bool wintering=false;              // Should we set up active wintering 
+bool frost_protection=false;               // Should we protect against freezing
+bool wintering=false;                      // Should we set up active wintering 
 
 /********************************************************************/
 void winteringModeChecking(float temperature)
 {
-  // Serial.println(wintering);
   if (temperature < MAX_WINTERING_TEMPERATURE && !wintering) 
   {
     // Pass automatically in wintering mode
@@ -150,17 +145,12 @@ float getAverageTemperature()
     sum_of_temperature = 0.;
     temperature_count = 0;
     Serial.print(temperature);
+    Serial.print(F(" degC; "));
+    Serial.print(F("Air_temperature:"));
+ 	  Serial.print(getTemperature(1));
     Serial.println(F(" degC\n"));
-
     winteringModeChecking(temperature);
-
   }
-  /* Serial.print(F("Water_temperature:"));
-  Serial.print(temperature);
-  Serial.print(F(","));
-  Serial.print(F("Air_temperature:"));
- 	Serial.println(getTemperature(1));
-  */
 
   return temperature; // return the current temperature or the new average
 }
@@ -178,7 +168,7 @@ unsigned long operatingTime(float T, float air_T)
   {
     optime = MS_DAY;
     frost_protection = true;
-    if (!old_frost_flag)      // frost protection flag just set - printing only once. 
+    if (!old_frost_flag)              // frost protection flag just set - printing only once. 
     {
       Serial.println(F("FROST PROTECTION MODE - FORCE PUMP CIRCULATION!"));
     }
@@ -193,7 +183,7 @@ unsigned long operatingTime(float T, float air_T)
     {
       divider = 2.5;
     }
-    optime = (unsigned long) (T*MS_HOUR)/(divider+wintering); // Divide temperature by 2.5 (or 3.5 during winter)
+    optime = (unsigned long) (T*MS_HOUR)/(divider+wintering);        // Divide temperature by 2.5 (or 3.5 during winter)
     frost_protection = false;
     if (old_frost_flag)      // frost protection flag just set - printing only once. 
     {
@@ -206,15 +196,15 @@ unsigned long operatingTime(float T, float air_T)
 /********************************************************************/ 
 unsigned int start(int relay) {
   digitalWrite(relay, RUNNING);
-  delay(1000);
-  return digitalRead(relay);
+  // delay(1000);
+  // return digitalRead(relay);
 }
 
 /********************************************************************/ 
 unsigned int stop(int relay) {
   digitalWrite(relay, STOPPED);
-  delay(1000);
-  return digitalRead(relay);
+  // delay(1000);
+  // return digitalRead(relay);
 }
 
 /********************************************************************/ 
@@ -402,8 +392,9 @@ void setup(void)
   char erreur = 0;
   // On démarre le shield Ethernet SANS adresse IP (donc donnée via DHCP)
   erreur = Ethernet.begin(mac);
-
-  if (erreur == 0) {
+  
+  if (erreur == 0)
+  {
     Serial.println(F("Try a static IP..."));
     // If an error occurs, DHCP assignement is not working so we try to use a static IP.
     Ethernet.begin(mac, ip);
@@ -412,12 +403,14 @@ void setup(void)
   Serial.println(F("Ethernet Shied Init..."));
   // Donne une seconde au shield pour s'initialiser
   delay(1000);
+
   // On lance le serveur
   serveur.begin();
-  Serial.println(F("Server ready !\n"));
+  Serial.print(F("Server ready with a local IP: "));
+  Serial.println(Ethernet.localIP());
 
   // Start up the sensor library 
-  Serial.println(F("Starting temperature measurements ..."));
+  Serial.println(F("\nStarting temperature measurements ..."));
   sensors.begin(); 
 
   // Setup relays
@@ -568,23 +561,25 @@ void loop(void)
     }
   }
 
+  Serial.print(millis() - previous_time_of_the_day); 
+
   // Regarde si un client est connecté et attend une réponse
   EthernetClient client = serveur.available();
-    
   if (client) { // Un client est là ?
-  /*
+  
     repondre(client);
     // Donne le temps au client de prendre les données
     delay(10);
     // Ferme la connexion avec le client
     client.stop();
-  */
+  
+   /*
     Serial.println("Connexion !");
     url = ""; // on remet à zéro notre chaîne tampon
     url_index = 0;
     while(client.connected()) { // Tant que le client est connecté
-      Serial.println(client.connected());
-      if(client.available()) { // A-t-il des choses à dire ?
+      Serial.println("client.connected");
+      /* if(client.available()) { // A-t-il des choses à dire ?
         // Serial.print("client available");
         // traitement des infos du client
         char carlu = client.read(); //on lit ce qu'il raconte
@@ -607,9 +602,8 @@ void loop(void)
           // on quitte le while
           break;
         }
-      }
-      // repondre(client);
-      // break;
+      } 
+      
     } 
     
     // Donne le temps au client de prendre les données
@@ -617,7 +611,7 @@ void loop(void)
     // Ferme la connexion avec le client
     client.stop();
     Serial.println(F("Deconnexion !"));
-   
+   */
   }
 }
 
