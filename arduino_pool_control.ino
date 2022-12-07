@@ -211,12 +211,11 @@ void relayStatus(void)
   Serial.println("");
 }
 
-void repondre(EthernetClient client) 
+void sendFeedback(EthernetClient client) 
 {
   // La fonction prend un client en argument
 
   // Quelqu'un est connecté !
-  Serial.println(F("\nRéponse au client !")); // debug
   // On fait notre en-tête
   // Tout d'abord le code de réponse 200 = réussite
   // Puis le type mime du contenu renvoyé, du json
@@ -257,37 +256,32 @@ void checkConnectedClient()
   if (client) 
   {
     
-    Serial.println(F("\nClient connexion ..."));
     url = "";
-    
     while(client.connected()) 
     { // While the client is connected
     
       if(client.available()) 
       { // Something to say ? 
-        // traitement des infos du client
         
-        char c = client.read(); //on lit ce qu'il raconte
+        char c = client.read(); //read it!
         
         if(c != '\n') 
-        { // On est en fin de chaîne ?
-          // non ! alors on stocke le caractère
+        { 
           url += c;
         } 
         else 
         {
-          // on a fini de lire ce qui nous intéresse
-          // on marque la fin de l'url (caractère de fin de chaîne)
           url += '\n';
-          Serial.println(url);
-          // boolean ok = interpreter(); // essaie d'interpréter la chaîne
-          // if(ok) {
-          // tout s'est bien passé = on met à jour les broches
-          //  action();
-          repondre(client);
+          
+          boolean ok = interpreter(); // Try to interpret the string
+          if(ok) {
+            // well it is ok, so execute the related action
+            //  action();
+          }
+          // In all case, send a ffedback to the client
+          sendFeedback(client);
           delay(10);     
-          client.stop();
-          Serial.println(F("Deconnexion !"));     
+          client.stop();    
           break;
         }
             
@@ -295,6 +289,81 @@ void checkConnectedClient()
     } 
     
   }
+}
+
+boolean interpreter() {
+
+  /*
+  // On commence par mettre à zéro tous les états
+  etats[0] = LOW;
+  etats[1] = LOW;
+  etats[2] = LOW;
+  pwm = 0;
+
+  // Puis maintenant on va chercher les caractères/marqueurs un par un.
+  index = 0; // Index pour se promener dans la chaîne (commence à 4 pour enlever "GET "
+  while(url[index-1] != 'b' && url[index] != '=') { // On commence par chercher le "b="
+    index++; // Passe au caractère suivant
+    if(index == 100) {
+      // On est rendu trop loin !
+      Serial.println("Oups, probleme dans la recherche de 'b='");
+      return false;
+    }
+  }
+  // Puis on lit jusqu’à trouver le '&' séparant les broches de pwm
+  while(url[index] != '&') { // On cherche le '&'
+    if(url[index] >= '3' && url[index] <= '5') {
+      // On a trouvé un chiffre identifiant une broche
+      char broche = url[index]-'0'; // On ramène ça au format décimal
+      etats[broche-3] = HIGH; // Puis on met la broche dans un futur état haut
+    }
+    index++; // Passe au caractère suivant
+    if(index == 100) {
+      // On est rendu trop loin !
+      Serial.println("Oups, probleme dans la lecture des broches");
+      return false;
+    }
+    // NOTE : Les virgules séparatrices sont ignorées
+  }
+  // On a les broches, reste plus que la valeur de la PWM
+  // On cherche le "p="
+  while(url[index-1] != 'p' && url[index] != '=' && index<100) {
+    index++; // Passe au caractère suivant
+    if(index == 100) {
+      // On est rendu trop loin !
+      Serial.println("Oups, probleme dans la recherche de 'p='");
+      return false;
+    }
+  }
+  // Maintenant, on va fouiller jusqu'a trouver un espace
+  while(url[index] != ' ') { // On cherche le ' ' final
+    if(url[index] >= '0' && url[index] <= '9') {
+      // On a trouve un chiffre !
+      char val = url[index]-'0'; // On ramene ca au format decimal
+      pwm = (pwm*10) + val; // On stocke dans la pwm
+    }
+    index++; // Passe au caractère suivant
+    if(index == 100) {
+      // On est rendu trop loin !
+      Serial.println("Oups, probleme dans la lecture de la pwm");
+      return false;
+    }
+    // NOTE : Les virgules séparatrices sont ignorées
+  }
+  */
+  
+  // Rendu ici, on a trouvé toutes les informations utiles !
+  return true;
+}
+
+void action() {
+  // On met à jour nos broches
+
+  /*
+  digitalWrite(3, etats[0]);
+  digitalWrite(4, etats[1]);
+  digitalWrite(5, etats[2]);
+  */
 }
 // **************************************************************************
 // SETUP
@@ -399,81 +468,7 @@ void printDuration(unsigned long optime, unsigned long period)
 }
 
 /********************************************************************/ 
-boolean interpreter() {
 
-  /*
-  // On commence par mettre à zéro tous les états
-  etats[0] = LOW;
-  etats[1] = LOW;
-  etats[2] = LOW;
-  pwm = 0;
-
-  // Puis maintenant on va chercher les caractères/marqueurs un par un.
-  index = 0; // Index pour se promener dans la chaîne (commence à 4 pour enlever "GET "
-  while(url[index-1] != 'b' && url[index] != '=') { // On commence par chercher le "b="
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la recherche de 'b='");
-      return false;
-    }
-  }
-  // Puis on lit jusqu’à trouver le '&' séparant les broches de pwm
-  while(url[index] != '&') { // On cherche le '&'
-    if(url[index] >= '3' && url[index] <= '5') {
-      // On a trouvé un chiffre identifiant une broche
-      char broche = url[index]-'0'; // On ramène ça au format décimal
-      etats[broche-3] = HIGH; // Puis on met la broche dans un futur état haut
-    }
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la lecture des broches");
-      return false;
-    }
-    // NOTE : Les virgules séparatrices sont ignorées
-  }
-  // On a les broches, reste plus que la valeur de la PWM
-  // On cherche le "p="
-  while(url[index-1] != 'p' && url[index] != '=' && index<100) {
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la recherche de 'p='");
-      return false;
-    }
-  }
-  // Maintenant, on va fouiller jusqu'a trouver un espace
-  while(url[index] != ' ') { // On cherche le ' ' final
-    if(url[index] >= '0' && url[index] <= '9') {
-      // On a trouve un chiffre !
-      char val = url[index]-'0'; // On ramene ca au format decimal
-      pwm = (pwm*10) + val; // On stocke dans la pwm
-    }
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la lecture de la pwm");
-      return false;
-    }
-    // NOTE : Les virgules séparatrices sont ignorées
-  }
-  */
-  
-  // Rendu ici, on a trouvé toutes les informations utiles !
-  return true;
-}
-
-/********************************************************************/
-void action() {
-  // On met à jour nos broches
-
-  /*
-  digitalWrite(3, etats[0]);
-  digitalWrite(4, etats[1]);
-  digitalWrite(5, etats[2]);
-  */
-}
 
 /********************************************************************/ 
 void controle(unsigned long current_time)
