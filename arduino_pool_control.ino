@@ -57,7 +57,11 @@ bool wintering=false;                      // Should we set up active wintering
 float water_temperature;
 float air_temperature;
 
-EthernetServer serveur(4200);              // define a server listening to port 4200
+EthernetServer server(4200);              // define a server listening to port 4200
+// variables used for reading message from client
+//char *url = (char *)malloc(100); // array to store url chars
+//char url_index = 0; 
+String url; 
 
 float getTemperature(int index=0)
 {
@@ -211,12 +215,8 @@ void repondre(EthernetClient client)
 {
   // La fonction prend un client en argument
 
-  float water_temperature = getTemperature(INDEX_WATER_SENSOR);
-  float air_temperature = getTemperature(INDEX_AIR_SENSOR);
-
   // Quelqu'un est connecté !
   Serial.println(F("\nRéponse au client !")); // debug
-
   // On fait notre en-tête
   // Tout d'abord le code de réponse 200 = réussite
   // Puis le type mime du contenu renvoyé, du json
@@ -226,7 +226,7 @@ void repondre(EthernetClient client)
   client.println(F("HTTP/1.1 200 OK"));
   client.println(F("Content-Type: application/json; charset: utf-8"));
   client.println(F("Access-Control-Allow-Origin: *\n"));
-
+  
   // Puis on commence notre JSON par une accolade ouvrante
   client.println(F("{"));
 
@@ -249,7 +249,53 @@ void repondre(EthernetClient client)
   client.println(F("}"));
 }
 
-
+void checkConnectedClient()
+{
+  // Look for a connected client
+  EthernetClient client = server.available();
+  
+  if (client) 
+  {
+    
+    Serial.println(F("\nClient connexion ..."));
+    url = "";
+    
+    while(client.connected()) 
+    { // While the client is connected
+    
+      if(client.available()) 
+      { // Something to say ? 
+        // traitement des infos du client
+        
+        char c = client.read(); //on lit ce qu'il raconte
+        
+        if(c != '\n') 
+        { // On est en fin de chaîne ?
+          // non ! alors on stocke le caractère
+          url += c;
+        } 
+        else 
+        {
+          // on a fini de lire ce qui nous intéresse
+          // on marque la fin de l'url (caractère de fin de chaîne)
+          url += '\n';
+          Serial.println(url);
+          // boolean ok = interpreter(); // essaie d'interpréter la chaîne
+          // if(ok) {
+          // tout s'est bien passé = on met à jour les broches
+          //  action();
+          repondre(client);
+          delay(10);     
+          client.stop();
+          Serial.println(F("Deconnexion !"));     
+          break;
+        }
+            
+      } 
+    } 
+    
+  }
+}
 // **************************************************************************
 // SETUP
 // **************************************************************************
@@ -257,7 +303,7 @@ void repondre(EthernetClient client)
 void setup(void)
 {
   // Start the Serial port for debugging
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   Serial.println(F("POOL CONTROLLER"));
   Serial.println(F("***************\n"));
@@ -282,7 +328,7 @@ void setup(void)
   Serial.print(F("Start server with IP  "));
   Serial.print(Ethernet.localIP());
   Serial.println(F(":4200"));
-  serveur.begin();
+  server.begin();
     
   // Setup relays
   Serial.println(F("\nInit relay state ..."));
@@ -318,62 +364,8 @@ void loop(void)
   // current time for this loop
   unsigned long current_time = millis();
 
-  // variables used for reading message from client
-  char *url = (char *)malloc(100); // array to store url chars
-  char url_index = 0; 
+  checkConnectedClient();
 
-  // Look for a connected client
-  EthernetClient client = serveur.available();
-  
-  if (client) 
-  {
-    
-    Serial.println(F("Client connexion !"));
-    url = ""; 
-    url_index = 0;
-
-    while(client.connected()) 
-    { // While the client is connected
-    
-      if(client.available()) 
-      { // Something to say ? 
-        // traitement des infos du client
-        
-        char carlu = client.read(); //on lit ce qu'il raconte
-        Serial.print(carlu);
-        /*
-        if(carlu != '\n') { // On est en fin de chaîne ?
-          // non ! alors on stocke le caractère
-          url[url_index] = carlu;
-          url_index++;
-        } 
-        else 
-        {
-          // on a fini de lire ce qui nous intéresse
-          // on marque la fin de l'url (caractère de fin de chaîne)
-          url[url_index] = '\0';
-          // boolean ok = interpreter(); // essaie d'interpréter la chaîne
-          // if(ok) {
-          // tout s'est bien passé = on met à jour les broches
-          //  action();
-        }
-        // Serial.println(url);
-        */
-        // et dans tout les cas on répond au client
-        repondre(client);
-        
-        // on quitte le while
-        break;
-      } 
-    } 
-    
-    // Donne le temps au client de prendre les données
-    delay(100);
-
-    // Ferme la connexion avec le client
-    client.stop();
-    Serial.println(F("Deconnexion !"));
-  }
 }
 
 /********************************************************************/ 
