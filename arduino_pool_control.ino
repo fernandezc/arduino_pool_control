@@ -54,6 +54,8 @@ unsigned long operating_time;              // store the pump operating time to e
 
 bool frost_protection=false;               // Should we protect against freezing
 bool wintering=false;                      // Should we set up active wintering 
+float water_temperature;
+float air_temperature;
 
 EthernetServer serveur(4200);              // define a server listening to port 4200
 
@@ -205,7 +207,7 @@ void relayStatus(void)
   Serial.println("");
 }
 
-void repondre(EthernetClient client, float water_temperature, float air_temperature) 
+void repondre(EthernetClient client) 
 {
   // La fonction prend un client en argument
 
@@ -292,8 +294,8 @@ void setup(void)
   sensors.begin(); 
 
   // Read initial temperature
-  float water_temperature = getTemperature(INDEX_WATER_SENSOR);
-  float air_temperature = getTemperature(INDEX_AIR_SENSOR);
+  water_temperature = getTemperature(INDEX_WATER_SENSOR);
+  air_temperature = getTemperature(INDEX_AIR_SENSOR);
 
   // Check wintering mode 
   winteringModeChecking(water_temperature);
@@ -303,17 +305,19 @@ void setup(void)
 
 } 
 
+// **************************************************************************
+// LOOP
+// **************************************************************************
+
 void loop(void) 
 { 
 
   // current time for this loop
   unsigned long current_time = millis();
-  // float water_temperature = getTemperature(INDEX_WATER_SENSOR);
-  // float air_temperature = getTemperature(INDEX_AIR_SENSOR);
 
   // variables used for reading message from client
-  // char *url = (char *)malloc(100); // array to store url chars
-  //char url_index = 0; 
+  char *url = (char *)malloc(100); // array to store url chars
+  char url_index = 0; 
 
   // Look for a connected client
   EthernetClient client = serveur.available();
@@ -322,18 +326,19 @@ void loop(void)
   {
     
     Serial.println(F("Client connexion !"));
-    // url = ""; 
-    // url_index = 0;
+    url = ""; 
+    url_index = 0;
 
     while(client.connected()) 
     { // While the client is connected
     
-      // if(client.available()) 
-      // { // Something to say ?
-        Serial.println("client available");
-       /* 
+      if(client.available()) 
+      { // Something to say ? 
         // traitement des infos du client
+        
         char carlu = client.read(); //on lit ce qu'il raconte
+        Serial.print(carlu);
+        /*
         if(carlu != '\n') { // On est en fin de chaîne ?
           // non ! alors on stocke le caractère
           url[url_index] = carlu;
@@ -352,11 +357,11 @@ void loop(void)
         // Serial.println(url);
         */
         // et dans tout les cas on répond au client
-        // repondre(client, water_temperature, air_temperature);
+        repondre(client);
         
         // on quitte le while
         break;
-      // } 
+      } 
     } 
     
     // Donne le temps au client de prendre les données
