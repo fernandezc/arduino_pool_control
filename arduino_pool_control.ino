@@ -36,6 +36,7 @@ const char *TSENSOR[2] = {"water", "air"};
 #define PH_RELAY 6           // Pin 6 for ph relay
 const char* RELAY[7] = { "none", "none", "none", "PUMP_RELAY", "none", "ELECTROLYSE_RELAY", "PH_RELAY" };
 const char* STATUS[2] = {"Stopped", "Running"};
+const char* MODES[3] = {"OFF", "auto", "CONTINUOUS"};
 #define RUNNING HIGH
 #define STOPPED LOW
 
@@ -45,7 +46,7 @@ const char* STATUS[2] = {"Stopped", "Running"};
 #define MS_HOUR 3600000
 #define NPERIODS 480                       // number of periods for filtration during 24h
 
-unsigned int mode= 1;                      // operating mode = auto (0=on, 2=off)
+unsigned int mode=1;                       // operating mode = AUTO (0=OFF, 2=FORCED)
 
 unsigned long previous_measured=0;         // store last time temperature was measured
 unsigned long previous_pump_start=0;       // store last time pump was running
@@ -135,6 +136,24 @@ unsigned long operatingTime(float water_T, float air_T)
   
   old_frost_flag = frost_protection;  // get the current frost protection flag
 
+  if (water_T > MAX_WINTERING_TEMPERATURE)
+  {
+    divider = 2;
+  }
+  else 
+  {
+    if (water_T > MAX_WINTERING_TEMPERATURE/2)
+    {
+      divider = 3;
+    }
+    else
+    {
+      divider = 4;
+    }
+  }
+  operating_time = (unsigned long) (water_T*MS_HOUR)/(divider);        // Divide temperature by 2 (or 3 during winter)
+    
+  // special situation during frozing air temperature
   if (air_T < FROST_TEMPERATURE)
   {
     operating_time = MS_DAY;
@@ -145,27 +164,31 @@ unsigned long operatingTime(float water_T, float air_T)
     }
   }
   else
-  {
-    if (water_T > MAX_WINTERING_TEMPERATURE)
-    {
-      divider = 2;
-    }
-    else 
-    {
-      if (water_T > MAX_WINTERING_TEMPERATURE/2)
-      {
-        divider = 3;
-      }
-      else
-      {
-        divider = 4;
-      }
-    }
-    operating_time = (unsigned long) (water_T*MS_HOUR)/(divider);        // Divide temperature by 2 (or 3 during winter)
+  { 
     frost_protection = false;
     if (old_frost_flag)      // frost protection flag just set - printing only once. 
     {
       Serial.println(F("EXIT FROST PROTECTION MODE - RETURN TO NORMAL MODE!"));
+    }    
+  }
+
+  // look if the mode is not auto
+  if (!frost_protection)
+  {
+    if (mode == 0) // OFF
+    {
+      // Stopped
+      if (operating_time != 0)
+      {      
+        operating_time = 0;
+      }
+    }
+    else if (mode == 2) // CONTINUOUS
+    {
+      if (operating_time != 2)
+      { 
+        operating_time = MS_DAY;
+      }
     }    
   }
 
@@ -313,7 +336,9 @@ boolean interpreter(String url) {
   {
     mode = url.substring(url.indexOf("mode=")+5, url.indexOf("mode=")+6).toInt();
     Serial.print(F("mode = "));
-    Serial.println(mode);
+    Serial.println(MODES[mode]);
+    // recompute operating time
+    operating_time = operatingTime(water_temperature, air_temperature);
     return true;
   }
 
@@ -387,8 +412,7 @@ void updatePoolControl(unsigned long current_time)
     previous_pump_start = current_time;
     pump_working_time = 0;
     
-    Serial.print(F("\n|n* Starting a new period "));
-    Serial.println(F(" ..."));
+    Serial.print(F("\n\n* Starting a new period ... "));
   }
   if (pump_working_time < operating_time)
   {
@@ -516,6 +540,9 @@ void setup(void)
 
   // Initialize start time for fitration period
   starting_time = millis();
+
+  Serial.print(F("\n\n* Starting a first period ... "));  
+  
 } 
 
 // **************************************************************************
