@@ -193,6 +193,7 @@ unsigned int stop(int relay) {
   delay(1000);
   int state = digitalRead(relay);
   Serial.println(STATUS[state]);
+  return state;
 }
 
 unsigned int start(int relay) {
@@ -203,6 +204,7 @@ unsigned int start(int relay) {
   delay(1000);
   int state = digitalRead(relay);
   Serial.println(STATUS[state]);
+  return state;
 }
 
 void relayStatus(void)
@@ -390,6 +392,7 @@ void updatePoolControl(unsigned long current_time)
   }
   if (pump_working_time < operating_time)
   {
+    Serial.print(F("."));
     pump_state = digitalRead(PUMP_RELAY);
     
     if (pump_state == STOPPED)
@@ -400,7 +403,6 @@ void updatePoolControl(unsigned long current_time)
       if (digitalRead(PUMP_RELAY) == STOPPED)
       {
         pump_state = start(PUMP_RELAY);   
-        Serial.println(F("Pump is now running."));
       }
     }
     previous_pump_state = pump_state;
@@ -411,11 +413,14 @@ void updatePoolControl(unsigned long current_time)
   {
     if (digitalRead(PUMP_RELAY) == RUNNING && !frost_protection)
     {
+      Serial.print(F(""));
       pump_state = stop(PUMP_RELAY);
       previous_pump_state = pump_state;
     }  
   }
   
+  Serial.print(F("."));
+
   // Both the electrolyse and PH Meter require pump is running
   // Electrolyseur (close when temperature is too low or pump is stopped)
   if (water_temperature <= MIN_ELECTROLYSIS_TEMPERATURE || pump_state == STOPPED) 
@@ -506,7 +511,6 @@ void setup(void)
   
   // Initialize operating time
   operating_time = operatingTime(water_temperature, air_temperature);
-  Serial.print(operating_time);
 
   // Initialise start time for measurement interval
   starting_update_time = millis();
