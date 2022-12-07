@@ -45,6 +45,8 @@ const char* STATUS[2] = {"Stopped", "Running"};
 #define MS_HOUR 3600000
 #define NPERIODS 960                       // number of periods for filtration during 24h
 
+unsigned int mode= 1;                      // operating mode = auto (0=on, 2=off)
+
 unsigned long previous_measured=0;         // store last time temperature was measured
 unsigned long previous_pump_start=0;       // store last time pump was running
 unsigned long pump_working_time=0;         // will store the cumulative working time of the pump
@@ -58,10 +60,6 @@ float water_temperature;
 float air_temperature;
 
 EthernetServer server(4200);              // define a server listening to port 4200
-// variables used for reading message from client
-//char *url = (char *)malloc(100); // array to store url chars
-//char url_index = 0; 
-String url; 
 
 float getTemperature(int index=0)
 {
@@ -248,15 +246,16 @@ void sendFeedback(EthernetClient client)
   client.println(F("}"));
 }
 
-void checkConnectedClient()
+void checkConnectedClient(void)
 {
   // Look for a connected client
   EthernetClient client = server.available();
-  
+
   if (client) 
   {
     
-    url = "";
+    String url = "";
+    
     while(client.connected()) 
     { // While the client is connected
     
@@ -271,9 +270,8 @@ void checkConnectedClient()
         } 
         else 
         {
-          url += '\n';
-          
-          boolean ok = interpreter(); // Try to interpret the string
+          url += '\0'; // end of string
+          boolean ok = interpreter(url); // Try to interpret the string
           if(ok) {
             // well it is ok, so execute the related action
             //  action();
@@ -291,80 +289,25 @@ void checkConnectedClient()
   }
 }
 
-boolean interpreter() {
+boolean interpreter(String url) {
+  // TO BE COMPLETED WITH ADDITIONAL COMMAND 
 
-  /*
-  // On commence par mettre à zéro tous les états
-  etats[0] = LOW;
-  etats[1] = LOW;
-  etats[2] = LOW;
-  pwm = 0;
+  // mode?
+  if (url.indexOf("mode=") > 0)
+  {
+    mode = url.substring(url.indexOf("mode=")+5, url.indexOf("mode=")+6).toInt();
+    Serial.print(F("mode = "));
+    Serial.println(mode);
+    return true;
+  }
 
-  // Puis maintenant on va chercher les caractères/marqueurs un par un.
-  index = 0; // Index pour se promener dans la chaîne (commence à 4 pour enlever "GET "
-  while(url[index-1] != 'b' && url[index] != '=') { // On commence par chercher le "b="
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la recherche de 'b='");
-      return false;
-    }
-  }
-  // Puis on lit jusqu’à trouver le '&' séparant les broches de pwm
-  while(url[index] != '&') { // On cherche le '&'
-    if(url[index] >= '3' && url[index] <= '5') {
-      // On a trouvé un chiffre identifiant une broche
-      char broche = url[index]-'0'; // On ramène ça au format décimal
-      etats[broche-3] = HIGH; // Puis on met la broche dans un futur état haut
-    }
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la lecture des broches");
-      return false;
-    }
-    // NOTE : Les virgules séparatrices sont ignorées
-  }
-  // On a les broches, reste plus que la valeur de la PWM
-  // On cherche le "p="
-  while(url[index-1] != 'p' && url[index] != '=' && index<100) {
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la recherche de 'p='");
-      return false;
-    }
-  }
-  // Maintenant, on va fouiller jusqu'a trouver un espace
-  while(url[index] != ' ') { // On cherche le ' ' final
-    if(url[index] >= '0' && url[index] <= '9') {
-      // On a trouve un chiffre !
-      char val = url[index]-'0'; // On ramene ca au format decimal
-      pwm = (pwm*10) + val; // On stocke dans la pwm
-    }
-    index++; // Passe au caractère suivant
-    if(index == 100) {
-      // On est rendu trop loin !
-      Serial.println("Oups, probleme dans la lecture de la pwm");
-      return false;
-    }
-    // NOTE : Les virgules séparatrices sont ignorées
-  }
-  */
-  
-  // Rendu ici, on a trouvé toutes les informations utiles !
-  return true;
+  return false;
 }
 
 void action() {
-  // On met à jour nos broches
 
-  /*
-  digitalWrite(3, etats[0]);
-  digitalWrite(4, etats[1]);
-  digitalWrite(5, etats[2]);
-  */
 }
+
 // **************************************************************************
 // SETUP
 // **************************************************************************
@@ -432,14 +375,11 @@ void loop(void)
 
   // current time for this loop
   unsigned long current_time = millis();
-
+  
   checkConnectedClient();
 
 }
 
-/********************************************************************/ 
-
-/********************************************************************/ 
 void printDuration(unsigned long optime, unsigned long period)
 {
     if (period >= 3600000)
@@ -471,7 +411,7 @@ void printDuration(unsigned long optime, unsigned long period)
 
 
 /********************************************************************/ 
-void controle(unsigned long current_time)
+void controller(unsigned long current_time)
 {
   unsigned long period;
   unsigned int pump_state;
