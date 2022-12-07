@@ -27,7 +27,7 @@ const char *TSENSOR[2] = {"water", "air"};
 
 #define INDEX_WATER_SENSOR 0
 #define INDEX_AIR_SENSOR 1
-#define TEMPERATURE_MEASUREMENT_INTERVAL 300000     // measurement every 5 min
+#define UPDATE_INTERVAL 10000     // update contoller every 1 min
 
 
 // Pin connections for relays(do not use pin 4)
@@ -43,14 +43,15 @@ const char* STATUS[2] = {"Stopped", "Running"};
 
 #define MS_DAY  86400000
 #define MS_HOUR 3600000
-#define NPERIODS 960                       // number of periods for filtration during 24h
+#define NPERIODS 480                       // number of periods for filtration during 24h
 
 unsigned int mode= 1;                      // operating mode = auto (0=on, 2=off)
 
 unsigned long previous_measured=0;         // store last time temperature was measured
 unsigned long previous_pump_start=0;       // store last time pump was running
 unsigned long pump_working_time=0;         // will store the cumulative working time of the pump
-unsigned long starting_time=0;             // will store the starting time of each period of the day
+unsigned long starting_update_time;        // will store the starting time for updating measurments
+unsigned long starting_time;               // will store the starting time of each period of the day
                                            // (we do not have the actual time so the start is arbitrary)
 unsigned long operating_time;              // store the pump operating time to execute
 
@@ -61,7 +62,12 @@ float air_temperature;
 
 EthernetServer server(4200);              // define a server listening to port 4200
 
-float getTemperature(int index=0)
+
+// **************************************************************************
+// Functions
+// **************************************************************************
+
+float getTemperature(int index, boolean display)
 {
   float temperature;
   // call sensors.requestTemperatures() to issue a global temperature 
@@ -72,18 +78,27 @@ float getTemperature(int index=0)
   // You can have more than one DS18B20 on the same bus.  
   // 0 refers to the first IC on the wire
 
-  Serial.print(F("Current "));
-  Serial.print(TSENSOR[index]);
-  Serial.print(F(" temperature is "));
-  Serial.print(temperature);
-  Serial.println(F(" degC"));
+  // Mock temperature
+  if (index==0) 
+  {
+    temperature=16.;
+  }
+  else
+  {
+    temperature=4.;
+  }
+
+  if (display)
+  {  
+    Serial.print(F("Current "));
+    Serial.print(TSENSOR[index]);
+    Serial.print(F(" temperature is "));
+    Serial.print(temperature);
+    Serial.println(F(" degC"));
+  }
 
   return temperature;
 }
-
-// **************************************************************************
-// Functions
-// **************************************************************************
 
 // Wintering mode checking 
 // -----------------------
@@ -122,7 +137,7 @@ unsigned long operatingTime(float water_T, float air_T)
 
   if (air_T < FROST_TEMPERATURE)
   {
-    optime = MS_DAY;
+    operating_time = MS_DAY;
     frost_protection = true;
     if (!old_frost_flag)              // frost protection flag just set - printing only once. 
     {
@@ -146,7 +161,7 @@ unsigned long operatingTime(float water_T, float air_T)
         divider = 4;
       }
     }
-    optime = (unsigned long) (water_T*MS_HOUR)/(divider);        // Divide temperature by 2 (or 3 during winter)
+    operating_time = (unsigned long) (water_T*MS_HOUR)/(divider);        // Divide temperature by 2 (or 3 during winter)
     frost_protection = false;
     if (old_frost_flag)      // frost protection flag just set - printing only once. 
     {
@@ -159,8 +174,8 @@ unsigned long operatingTime(float water_T, float air_T)
   Serial.print("h (");
   Serial.print((float)operating_time*100/MS_DAY);
   Serial.println("% of the time)");
-
-  return optime;
+  
+  return operating_time/NPERIODS;
 }
 
 void stopAllRelays(void)
@@ -271,12 +286,11 @@ void checkConnectedClient(void)
         else 
         {
           url += '\0'; // end of string
-          boolean ok = interpreter(url); // Try to interpret the string
-          if(ok) {
-            // well it is ok, so execute the related action
-            //  action();
-          }
-          // In all case, send a ffedback to the client
+
+          // Try to interpret the string
+          interpreter(url); 
+
+          // In all case, send a feedback to the client
           sendFeedback(client);
           delay(10);     
           client.stop();    
@@ -305,6 +319,135 @@ boolean interpreter(String url) {
 }
 
 void action() {
+
+}
+
+void printDuration(unsigned long optime, unsigned long period)
+{
+    if (period >= 3600000)
+    {
+      Serial.print((float)optime/3600/1000);
+      Serial.print(F("h per period of "));
+      Serial.print((float)period/3600/1000);
+      Serial.println(F(" h"));
+    }
+    
+    if (period < 3600000)
+    { // minutes
+      Serial.print((float)optime/60/1000);
+      Serial.print(F(" min per period of "));
+      Serial.print((float)period/60/1000);
+      Serial.println(F(" min"));
+    }
+
+    if (period < 60000)
+    { // seconds
+      Serial.print((float)optime/1000);
+      Serial.print(F("s per period of "));
+      Serial.print((float)period/1000);
+      Serial.println(F(" s"));
+    }   
+}
+
+void updatePoolControl(unsigned long current_time)
+{
+  unsigned long period;
+  unsigned int pump_state;
+  unsigned int electrolyse_state;
+  unsigned int ph_state;
+  unsigned int previous_pump_state;
+  
+  // store last temperatures
+  float last_water_temperature = water_temperature;
+  float last_air_temperature = air_temperature;
+  
+  // Read current water and air temperature
+  water_temperature = getTemperature(INDEX_WATER_SENSOR, false);  // Do not display temperature if there is no change
+  air_temperature = getTemperature(INDEX_AIR_SENSOR, false);
+  
+  // Determine duration for a day
+  // We do this only if temperature have changed more than 0.2 degC or if air temperature go below 1degC
+  if (abs(water_temperature - last_water_temperature) > 0.2 || air_temperature < FROST_TEMPERATURE)
+  {
+    water_temperature = getTemperature(INDEX_WATER_SENSOR, true);   
+    air_temperature = getTemperature(INDEX_AIR_SENSOR, true);
+    operating_time = operatingTime(water_temperature, air_temperature);
+  }
+  
+  // determine if we are in the period as in the last loop
+  // else reinitialize to a new period
+  period = MS_DAY/NPERIODS;
+
+  if (current_time - starting_time >= period)
+  {
+    // Start a new period of the day and reset pump working time
+    starting_time = current_time;
+    previous_pump_start = current_time;
+    pump_working_time = 0;
+    
+    Serial.print(F("\n* Starting a new period "));
+    Serial.println(F(" ...\n"));
+  }
+  if (pump_working_time < operating_time)
+  {
+    pump_state = digitalRead(PUMP_RELAY);
+    
+    if (pump_state == STOPPED)
+    { 
+      Serial.print(F("Pump must be working for a minimum duration of "));
+      printDuration(operating_time, period);
+      
+      if (digitalRead(PUMP_RELAY) == STOPPED)
+      {
+        pump_state = start(PUMP_RELAY);   
+        Serial.println(F("Pump is now running."));
+      }
+    }
+    previous_pump_state = pump_state;
+    pump_working_time += current_time - previous_pump_start;
+    previous_pump_start = current_time;
+  }
+  else
+  {
+    if (digitalRead(PUMP_RELAY) == RUNNING && !frost_protection)
+    {
+      pump_state = stop(PUMP_RELAY);
+      previous_pump_state = pump_state;
+    }  
+  }
+  
+  // Both the electrolyse and PH Meter require pump is running
+  // Electrolyseur (close when temperature is too low or pump is stopped)
+  if (water_temperature <= MIN_ELECTROLYSIS_TEMPERATURE || pump_state == STOPPED) 
+  {
+    if (digitalRead(ELECTROLYSE_RELAY) == RUNNING)
+    {
+      stop(ELECTROLYSE_RELAY);
+    }
+  }
+  else
+  {
+    if (digitalRead(ELECTROLYSE_RELAY) == STOPPED)
+    {
+      start(ELECTROLYSE_RELAY);
+    } 
+  }  
+  
+  // PH meter (close when temperature is too low or pump is stopped)
+  if (water_temperature <= MIN_PH_METER_TEMPERATURE || pump_state == STOPPED) 
+  {
+    if (digitalRead(PH_RELAY) == RUNNING)
+    {
+      stop(PH_RELAY);
+    }
+  }
+  else
+  { 
+    if (digitalRead(PH_RELAY) == STOPPED)
+    {
+      start(PH_RELAY);
+    }
+  }
 
 }
 
@@ -355,15 +498,21 @@ void setup(void)
   sensors.begin(); 
 
   // Read initial temperature
-  water_temperature = getTemperature(INDEX_WATER_SENSOR);
-  air_temperature = getTemperature(INDEX_AIR_SENSOR);
+  water_temperature = getTemperature(INDEX_WATER_SENSOR, true);
+  air_temperature = getTemperature(INDEX_AIR_SENSOR, true);
 
   // Check wintering mode 
   winteringModeChecking(water_temperature);
   
   // Initialize operating time
   operating_time = operatingTime(water_temperature, air_temperature);
+  Serial.print(operating_time);
 
+  // Initialise start time for measurement interval
+  starting_update_time = millis();
+
+  // Initialize start time for fitration period
+  starting_time = millis();
 } 
 
 // **************************************************************************
@@ -376,139 +525,17 @@ void loop(void)
   // current time for this loop
   unsigned long current_time = millis();
   
+  // Check for a connected client to get or send information
   checkConnectedClient();
-
-}
-
-void printDuration(unsigned long optime, unsigned long period)
-{
-    if (period >= 3600000)
-    {
-      Serial.print((float)optime/3600/1000);
-      Serial.print(F("h per period of "));
-      Serial.print((float)period/3600/1000);
-      Serial.println(F(" h"));
-    }
-    
-    if (period < 3600000)
-    { // minutes
-      Serial.print((float)optime/60/1000);
-      Serial.print(F(" min per period of "));
-      Serial.print((float)period/60/1000);
-      Serial.println(F(" min"));
-    }
-
-    if (period < 60000)
-    { // seconds
-      Serial.print((float)optime/1000);
-      Serial.print(F("s per period of "));
-      Serial.print((float)period/1000);
-      Serial.println(F(" s"));
-    }   
-}
-
-/********************************************************************/ 
-
-
-/********************************************************************/ 
-void controller(unsigned long current_time)
-{
-  unsigned long period;
-  unsigned int pump_state;
-  unsigned int electrolyse_state;
-  unsigned int ph_state;
-  unsigned int previous_pump_state;
-  
-  // Read current water and air temperature
-  float water_temperature = getTemperature(INDEX_WATER_SENSOR);
-  float air_temperature = getTemperature(INDEX_AIR_SENSOR);
-  
-  // Determine duration for a day
-  operating_time = operatingTime(water_temperature, air_temperature)/NPERIODS;
-
-  // determine if we are in the period as in the last loop
-  // else reinitialize to a new period
-  period = MS_DAY/NPERIODS;
-  
-  if (current_time - starting_time >= period)
+ 
+  // Update the controller periodically (every minutes)
+  if ((current_time - starting_update_time) > UPDATE_INTERVAL)
   {
-    // Start a new day and reset pump working time
-    starting_time = current_time;
-    previous_pump_start = current_time;
-    pump_working_time = 0;
-    
-    Serial.print(F("\n* Starting a new period "));
-    Serial.println(F(" ...\n"));
-  }
-  // delay(1000);
-  // Serial.print(pump_working_time); Serial.print("\t"); Serial.println(operating_time);
-
-  if (pump_working_time < operating_time)
-  {
-    pump_state = digitalRead(PUMP_RELAY);
-    
-    if (pump_state == STOPPED)
-    { 
-      Serial.print(F("Pump must be working for a minimum duration of "));
-      printDuration(operating_time, period);
-      
-      if (digitalRead(PUMP_RELAY) == STOPPED)
-      {
-        pump_state = start(PUMP_RELAY);   
-        Serial.println(F("Pump is now running."));
-      }
-    }
-    previous_pump_state = pump_state;
-    pump_working_time += current_time - previous_pump_start;
-    previous_pump_start = current_time;
-  }
-  else
-  {
-    if (digitalRead(PUMP_RELAY) == RUNNING && !frost_protection)
-    {
-      pump_state = stop(PUMP_RELAY);
-      previous_pump_state = pump_state;
-      Serial.println(F("Pump is now stopped."));
-    }  
+     starting_update_time = current_time; 
+     updatePoolControl(current_time);
   }
   
-  // Both the electrolyse and PH Meter require pump is running
-  // Electrolyseur (close when temperature is too low or pump is stopped)
-  if (water_temperature <= MIN_ELECTROLYSIS_TEMPERATURE || pump_state == STOPPED) 
-  {
-    if (digitalRead(ELECTROLYSE_RELAY) == RUNNING)
-    {
-      stop(ELECTROLYSE_RELAY);
-      Serial.println(F("Electrolysis is now stopped."));
-    }
-  }
-  else
-  {
-    if (digitalRead(ELECTROLYSE_RELAY) == STOPPED)
-    {
-      start(ELECTROLYSE_RELAY);
-      Serial.println(F("Electrolysis is now running."));   
-    } 
-  }  
-  
-  // PH meter (close when temperature is too low or pump is stopped)
-  if (water_temperature <= MIN_PH_METER_TEMPERATURE || pump_state == STOPPED) 
-  {
-    if (digitalRead(PH_RELAY) == RUNNING)
-    {
-      stop(PH_RELAY);
-      Serial.println(F("Ph_Meter is now stopped."));
-    }
-  }
-  else
-  { 
-    if (digitalRead(PH_RELAY) == STOPPED)
-    {
-      start(PH_RELAY);
-      Serial.println(F("Ph_Meter is now running."));
-    }
-  }
-
+ 
 }
 
 
