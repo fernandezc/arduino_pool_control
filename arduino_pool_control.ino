@@ -44,7 +44,7 @@ const char* MODES[3] = {"OFF", "auto", "CONTINUOUS"};
 
 #define MS_DAY  86400000
 #define MS_HOUR 3600000
-#define NPERIODS 480                       // number of periods for filtration during 24h
+#define NPERIODS 8                         // number of periods for filtration during 24h
 
 unsigned int mode=1;                       // operating mode = AUTO (0=OFF, 2=FORCED)
 
@@ -80,6 +80,7 @@ float getTemperature(int index, boolean display)
   // 0 refers to the first IC on the wire
 
   // Mock temperature
+  /*
   if (index==0) 
   {
     temperature=16.;
@@ -88,6 +89,7 @@ float getTemperature(int index, boolean display)
   {
     temperature=4.;
   }
+  */
 
   if (display)
   {  
@@ -230,25 +232,6 @@ unsigned int start(int relay) {
   return state;
 }
 
-void relayStatus(void)
-{
-  int i;
-  int state; 
-
-  Serial.println("\nRelay's status :");
-  for (i=3; i<7; i++)
-  {
-    if (RELAY[i] != "none")
-    {
-      Serial.print(RELAY[i]);
-      Serial.print(F(" -> "));
-      state = digitalRead(i);
-      Serial.println(STATUS[state]);
-    }
-  }
-  Serial.println("");
-}
-
 void sendFeedback(EthernetClient client) 
 {
   // La fonction prend un client en argument
@@ -267,20 +250,41 @@ void sendFeedback(EthernetClient client)
   // Puis on commence notre JSON par une accolade ouvrante
   client.println(F("{"));
 
-  // On envoie la première clé : "uptime"
-  client.print(F("\t\"uptime (ms)\": "));
-  // Puis la valeur de l'uptime
-  client.print(millis());
-  //Une petite virgule pour séparer les clés
+  // key mode
+  client.print(F("\t\"mode\": \""));
+  client.print(MODES[mode]);
+  client.println(F("\","));
+
+  // key frost
+  client.print(F("\t\"frost protection\": "));
+  client.print(frost_protection);
   client.println(F(","));
-  // Et on envoie la clé nommée "water temperature"
+
+  // key water_temp
   client.print(F("\t\"water temperature (degC)\": "));
   client.print(water_temperature);
-  //Une autre virgule pour séparer les clés
   client.println(F(","));
-  // Et on envoie la clé nommée "air temperature"
+  
+  // key air_temp
   client.print(F("\t\"air temperature (degC)\": "));
-  client.println(air_temperature);
+  client.print(air_temperature);
+  client.println(F(","));
+
+  // Relay's status 
+  int i;
+  int state; 
+  for (i=3; i<7; i++)
+  {
+    if (RELAY[i] != "none")
+    {
+      client.print(F("\t\""));
+      client.print(RELAY[i]);
+      client.print(F("\": \""));
+      state = digitalRead(i);
+      client.print(STATUS[state]);
+      client.println(F("\","));
+    }
+  }
 
   // Et enfin on termine notre JSON par une accolade fermante
   client.println(F("}"));
