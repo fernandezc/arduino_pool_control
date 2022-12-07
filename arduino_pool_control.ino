@@ -211,6 +211,9 @@ void repondre(EthernetClient client)
 {
   // La fonction prend un client en argument
 
+  float water_temperature = getTemperature(INDEX_WATER_SENSOR);
+  float air_temperature = getTemperature(INDEX_AIR_SENSOR);
+
   // Quelqu'un est connecté !
   Serial.println(F("\nRéponse au client !")); // debug
 
