@@ -175,7 +175,7 @@ unsigned long operatingTime(float water_T, float air_T)
   Serial.print((float)operating_time*100/MS_DAY);
   Serial.println("% of the time)");
   
-  return operating_time/NPERIODS;
+  return operating_time;
 }
 
 void stopAllRelays(void)
@@ -373,7 +373,7 @@ void updatePoolControl(unsigned long current_time)
   {
     water_temperature = getTemperature(INDEX_WATER_SENSOR, true);   
     air_temperature = getTemperature(INDEX_AIR_SENSOR, true);
-    operating_time = operatingTime(water_temperature, air_temperature);
+    operating_time = operatingTime(water_temperature, air_temperature)/NPERIODS;
   }
   
   // determine if we are in the period as in the last loop
@@ -387,19 +387,19 @@ void updatePoolControl(unsigned long current_time)
     previous_pump_start = current_time;
     pump_working_time = 0;
     
-    Serial.print(F("\n* Starting a new period "));
-    Serial.println(F(" ...\n"));
+    Serial.print(F("\n|n* Starting a new period "));
+    Serial.println(F(" ..."));
   }
   if (pump_working_time < operating_time)
   {
-    Serial.print(F("."));
     pump_state = digitalRead(PUMP_RELAY);
     
     if (pump_state == STOPPED)
     { 
       Serial.print(F("Pump must be working for a minimum duration of "));
       printDuration(operating_time, period);
-      
+      Serial.println(F(""));
+
       if (digitalRead(PUMP_RELAY) == STOPPED)
       {
         pump_state = start(PUMP_RELAY);   
@@ -413,14 +413,12 @@ void updatePoolControl(unsigned long current_time)
   {
     if (digitalRead(PUMP_RELAY) == RUNNING && !frost_protection)
     {
-      Serial.print(F(""));
+      Serial.println(F(""));
       pump_state = stop(PUMP_RELAY);
       previous_pump_state = pump_state;
     }  
   }
   
-  Serial.print(F("."));
-
   // Both the electrolyse and PH Meter require pump is running
   // Electrolyseur (close when temperature is too low or pump is stopped)
   if (water_temperature <= MIN_ELECTROLYSIS_TEMPERATURE || pump_state == STOPPED) 
@@ -453,6 +451,7 @@ void updatePoolControl(unsigned long current_time)
       start(PH_RELAY);
     }
   }
+  Serial.print(F("."));
 
 }
 
