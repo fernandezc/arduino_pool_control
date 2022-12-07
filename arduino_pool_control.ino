@@ -205,9 +205,12 @@ void relayStatus(void)
   Serial.println("");
 }
 
-void repondre(EthernetClient client, float water_temperature, float air_temperature) 
+void repondre(EthernetClient client) 
 {
   // La fonction prend un client en argument
+
+  float water_temperature = getTemperature(INDEX_WATER_SENSOR);
+  float air_temperature = getTemperature(INDEX_AIR_SENSOR);
 
   // Quelqu'un est connecté !
   Serial.println(F("\nRéponse au client !")); // debug
@@ -308,8 +311,6 @@ void loop(void)
 
   // current time for this loop
   unsigned long current_time = millis();
-  // float water_temperature = getTemperature(INDEX_WATER_SENSOR);
-  // float air_temperature = getTemperature(INDEX_AIR_SENSOR);
 
   // variables used for reading message from client
   // char *url = (char *)malloc(100); // array to store url chars
@@ -352,7 +353,7 @@ void loop(void)
         // Serial.println(url);
         */
         // et dans tout les cas on répond au client
-        // repondre(client, water_temperature, air_temperature);
+        repondre(client);
         
         // on quitte le while
         break;
