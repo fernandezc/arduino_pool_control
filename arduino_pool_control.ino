@@ -19,7 +19,7 @@
 #define ONE_WIRE_BUS  7      // pin 7 for Temperature data wire
 OneWire oneWire(ONE_WIRE_BUS); 
 DallasTemperature sensors(&oneWire);
-const char *TSENSOR[2] = {"water", "air"};
+const String TSENSOR[2] = {"water", "air"};
 #define FROST_TEMPERATURE 1.0
 #define MAX_WINTERING_TEMPERATURE 13.0
 #define MIN_ELECTROLYSIS_TEMPERATURE 15.0
@@ -29,14 +29,13 @@ const char *TSENSOR[2] = {"water", "air"};
 #define INDEX_AIR_SENSOR 1
 #define UPDATE_INTERVAL 10000     // update contoller every 1 min
 
-
 // Pin connections for relays(do not use pin 4)
 #define PUMP_RELAY 3         // Pin 3 for pump relay
 #define ELECTROLYSE_RELAY 5  // Pin 5 for electrolysis relay
 #define PH_RELAY 6           // Pin 6 for ph relay
-const char* RELAY[7] = { "none", "none", "none", "PUMP_RELAY", "none", "ELECTROLYSE_RELAY", "PH_RELAY" };
-const char* STATUS[2] = {"Stopped", "Running"};
-const char* MODES[3] = {"OFF", "auto", "CONTINUOUS"};
+const String RELAY[7] = { "none", "none", "none", "pump_relay", "none", "electrolyse_relay", "ph_relay" };
+const String STATUS[2] = {"Stopped", "Running"};
+const String MODES[3] = {"OFF", "auto", "CONTINUOUS"};
 #define RUNNING HIGH
 #define STOPPED LOW
 
@@ -245,6 +244,8 @@ void sendFeedback(EthernetClient client)
 
   client.println(F("HTTP/1.1 200 OK"));
   client.println(F("Content-Type: application/json; charset: utf-8"));
+  client.println("Connection: close");  // the connection will be closed after completion of the response
+  client.println("Refresh: 5");
   client.println(F("Access-Control-Allow-Origin: *\n"));
   
   // Puis on commence notre JSON par une accolade ouvrante
@@ -255,18 +256,13 @@ void sendFeedback(EthernetClient client)
   client.print(MODES[mode]);
   client.println(F("\","));
 
-  // key frost
-  client.print(F("\t\"frost protection\": "));
-  client.print(frost_protection);
-  client.println(F(","));
-
   // key water_temp
-  client.print(F("\t\"water temperature (degC)\": "));
+  client.print(F("\t\"water_temperature\": "));
   client.print(water_temperature);
   client.println(F(","));
   
   // key air_temp
-  client.print(F("\t\"air temperature (degC)\": "));
+  client.print(F("\t\"air_temperature\": "));
   client.print(air_temperature);
   client.println(F(","));
 
@@ -286,6 +282,10 @@ void sendFeedback(EthernetClient client)
     }
   }
 
+  // key frost
+  client.print(F("\t\"frost_protection\": "));
+  client.println(frost_protection);
+  
   // Et enfin on termine notre JSON par une accolade fermante
   client.println(F("}"));
 }
@@ -568,9 +568,5 @@ void loop(void)
      starting_update_time = current_time; 
      updatePoolControl(current_time);
   }
-  
- 
+
 }
-
-
-
