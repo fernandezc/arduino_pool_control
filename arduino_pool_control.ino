@@ -34,8 +34,8 @@ const String TSENSOR[2] = {"water", "air"};
 #define ELECTROLYSE_RELAY 5  // Pin 5 for electrolysis relay
 #define PH_RELAY 6           // Pin 6 for ph relay
 const String RELAY[7] = { "none", "none", "none", "pump_relay", "none", "electrolyse_relay", "ph_relay" };
-const String STATUS[2] = {"Stopped", "Running"};
-const String MODES[3] = {"OFF", "auto", "CONTINUOUS"};
+const String STATUS[2] = {"off", "on"};
+const String MODES[3] = {"Off", "Auto", "Forcé"};
 #define RUNNING HIGH
 #define STOPPED LOW
 
@@ -79,16 +79,16 @@ float getTemperature(int index, boolean display)
   // 0 refers to the first IC on the wire
 
   // Mock temperature
-  /*
+  /**/
   if (index==0) 
   {
-    temperature=16.;
+    temperature=14.;
   }
   else
   {
     temperature=4.;
   }
-  */
+  /**/
 
   if (display)
   {  
@@ -245,7 +245,7 @@ void sendFeedback(EthernetClient client)
   client.println(F("HTTP/1.1 200 OK"));
   client.println(F("Content-Type: application/json; charset: utf-8"));
   client.println("Connection: close");  // the connection will be closed after completion of the response
-  client.println("Refresh: 5");
+  // client.println("Refresh: 5");
   client.println(F("Access-Control-Allow-Origin: *\n"));
   
   // Puis on commence notre JSON par une accolade ouvrante
@@ -449,7 +449,7 @@ void updatePoolControl(unsigned long current_time)
   
   // Both the electrolyse and PH Meter require pump is running
   // Electrolyseur (close when temperature is too low or pump is stopped)
-  if (water_temperature <= MIN_ELECTROLYSIS_TEMPERATURE || pump_state == STOPPED) 
+  if (water_temperature <= MIN_ELECTROLYSIS_TEMPERATURE || pump_state == STOPPED || frost_protection) 
   {
     if (digitalRead(ELECTROLYSE_RELAY) == RUNNING)
     {
@@ -465,7 +465,7 @@ void updatePoolControl(unsigned long current_time)
   }  
   
   // PH meter (close when temperature is too low or pump is stopped)
-  if (water_temperature <= MIN_PH_METER_TEMPERATURE || pump_state == STOPPED) 
+  if (water_temperature <= MIN_PH_METER_TEMPERATURE || pump_state == STOPPED || frost_protection) 
   {
     if (digitalRead(PH_RELAY) == RUNNING)
     {
