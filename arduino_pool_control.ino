@@ -8,6 +8,7 @@
 // **************************************************************************
 
 #define DEBUG 1
+#define MOCK 0 // This is to mock eth response for test without the eth card attached 
 
 // This two libraries are needed for the temperature sensors
 #include <OneWire.h> 
@@ -21,8 +22,8 @@
 #define ONE_WIRE_BUS  7      // pin 7 for Temperature data wire
 OneWire oneWire(ONE_WIRE_BUS); 
 DallasTemperature sensors(&oneWire);
-const String TSENSOR[2] = {"water", "air"};
-#define TEMPERATURE_PRECISION 10
+const char *TSENSOR[] = {"water", "air"};
+#define TEMPERATURE_PRECISION 11
 #define FROST_TEMPERATURE 1.0
 #define MAX_WINTERING_TEMPERATURE 13.0
 #define MIN_ELECTROLYSIS_TEMPERATURE 15.0
@@ -36,9 +37,9 @@ const String TSENSOR[2] = {"water", "air"};
 #define PUMP_RELAY 3         // Pin 3 for pump relay
 #define ELECTROLYSE_RELAY 5  // Pin 5 for electrolysis relay
 #define PH_RELAY 6           // Pin 6 for ph relay
-const String RELAY[7] = { "none", "none", "none", "pump_relay", "none", "electrolyse_relay", "ph_relay" };
-const String STATUS[2] = {"off", "on"};
-const String MODES[3] = {"Off", "Auto", "Forcé"};
+const char *RELAY[] = { "none", "none", "none", "pump_relay", "none", "electrolyse_relay", "ph_relay" };
+const char *STATUS[] = {"off", "on"};
+const char *MODES[] = {"Off", "Auto", "Forcé"};
 #define RUNNING HIGH
 #define STOPPED LOW
 
@@ -306,14 +307,18 @@ void sendFeedback(EthernetClient client)
 
 void checkConnectedClient(void)
 {
+  char* url = (char *)malloc(100);
+  int index;
+
   // Look for a connected client
   EthernetClient client = server.available();
 
   if (client) 
   {
     
-    String url = "";
-    
+    url = "";
+    index = 0;
+
     while(client.connected()) 
     { // While the client is connected
     
@@ -324,11 +329,12 @@ void checkConnectedClient(void)
         
         if(c != '\n') 
         { 
-          url += c;
+          url[index] = c;
+          index++;
         } 
         else 
         {
-          url += '\0'; // end of string
+          url[index]= '\0'; // end of string
 
           // Try to interpret the string
           interpreter(url); 
@@ -340,29 +346,47 @@ void checkConnectedClient(void)
             
       } 
     }
-    delay(1);     
+    delay(10);     
     client.stop();  
-    
+
   }
+/*  else {
+    if (MOCK) {
+      url = " GET /?mode=2 HTTP/1.1";
+      Serial.println(url);
+      interpreter(url);
+      delay(10000);
+    }  
+  } */
 }
 
-boolean interpreter(String url) {
+boolean interpreter(char url[]) {
   // TO BE COMPLETED WITH ADDITIONAL COMMAND 
 
-  // mode?
-  if (url.indexOf("mode=") > 0)
+  int index = 10; // Commence à 4 pour enlever GET 
+  bool found = false;
+
+  while (!(strcmp(url[index-4], "m") && strcmp(url[index],"=")))
   {
-    mode = url.substring(url.indexOf("mode=")+5, url.indexOf("mode=")+6).toInt();
+    index++;
+    // mode was not found  
+    if (index > 100) return false;
+  }
+
+  if (index < 100) {
+    // found
+    char mode = url[index+1]-'0'; 
     if (DEBUG) {
-      Serial.print(F("mode = "));
-      Serial.println(MODES[mode]);
+        Serial.print(F("mode = "));
+        Serial.println(MODES[mode]);
     }
     // recompute operating time
     operating_time = operatingTime(water_temperature, air_temperature);
-    return true;
-  }
+    return true;    
+  } 
 
-  return false;
+
+
 }
 
 void action() {
