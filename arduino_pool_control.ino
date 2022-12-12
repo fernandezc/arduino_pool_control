@@ -21,7 +21,7 @@
 #define ONE_WIRE_BUS  7      // pin 7 for Temperature data wire
 OneWire oneWire(ONE_WIRE_BUS); 
 DallasTemperature sensors(&oneWire);
-const String TSENSOR[2] = {"water", "air"};
+const char *TSENSOR[] = {"water", "air"};
 #define TEMPERATURE_PRECISION 10
 #define FROST_TEMPERATURE 1.0
 #define MAX_WINTERING_TEMPERATURE 13.0
@@ -36,9 +36,9 @@ const String TSENSOR[2] = {"water", "air"};
 #define PUMP_RELAY 3         // Pin 3 for pump relay
 #define ELECTROLYSE_RELAY 5  // Pin 5 for electrolysis relay
 #define PH_RELAY 6           // Pin 6 for ph relay
-const String RELAY[7] = { "none", "none", "none", "pump_relay", "none", "electrolyse_relay", "ph_relay" };
-const String STATUS[2] = {"off", "on"};
-const String MODES[3] = {"Off", "Auto", "Forcé"};
+const char *RELAY[] = { "none", "none", "none", "pump_relay", "none", "electrolyse_relay", "ph_relay" };
+const char *STATUS[] = {"off", "on"};
+const char *MODES[] = {"Off", "Auto", "Forcé"};
 #define RUNNING HIGH
 #define STOPPED LOW
 
@@ -505,6 +505,10 @@ void setup(void)
   // Start the Serial port for debugging
   Serial.begin(9600);
 
+  // disable SD card if one in the slot
+  pinMode(4,OUTPUT);
+  digitalWrite(4,HIGH);
+  
   // Initialize the ethernet card 
   byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xA5, 0x7E };   // ethernet card MAC address of the shield (must be unique)
   char erreur = 0;
