@@ -7,6 +7,8 @@
 // The running time is dispached in 6 hours period
 // **************************************************************************
 
+#define DEBUG 1
+
 // This two libraries are needed for the temperature sensors
 #include <OneWire.h> 
 #include <DallasTemperature.h>
@@ -20,6 +22,7 @@
 OneWire oneWire(ONE_WIRE_BUS); 
 DallasTemperature sensors(&oneWire);
 const String TSENSOR[2] = {"water", "air"};
+#define TEMPERATURE_PRECISION 10
 #define FROST_TEMPERATURE 1.0
 #define MAX_WINTERING_TEMPERATURE 13.0
 #define MIN_ELECTROLYSIS_TEMPERATURE 15.0
@@ -27,7 +30,7 @@ const String TSENSOR[2] = {"water", "air"};
 
 #define INDEX_WATER_SENSOR 0
 #define INDEX_AIR_SENSOR 1
-#define UPDATE_INTERVAL 10000     // update contoller every 1 min
+#define UPDATE_INTERVAL 10000     // update contoller every 1 sec
 
 // Pin connections for relays(do not use pin 4)
 #define PUMP_RELAY 3         // Pin 3 for pump relay
@@ -57,11 +60,10 @@ unsigned long operating_time;              // store the pump operating time to e
 
 bool frost_protection=false;               // Should we protect against freezing
 bool wintering=false;                      // Should we set up active wintering 
-float water_temperature;
-float air_temperature;
+float water_temperature = 5;
+float air_temperature = 5;
 
 EthernetServer server(4200);              // define a server listening to port 4200
-
 
 // **************************************************************************
 // Functions
@@ -78,19 +80,14 @@ float getTemperature(int index, boolean display)
   // You can have more than one DS18B20 on the same bus.  
   // 0 refers to the first IC on the wire
 
-  // Mock temperature
-  /**/
-  if (index==0) 
+  if (temperature == DEVICE_DISCONNECTED_C)
   {
-    temperature=14.;
+    if (display && DEBUG) Serial.println(F("Sensor disconnnected."));
+    if (index==0) temperature = water_temperature;
+    if (index==1) temperature = air_temperature;
   }
-  else
-  {
-    temperature=4.;
-  }
-  /**/
 
-  if (display)
+  if (display && DEBUG)
   {  
     Serial.print(F("Current "));
     Serial.print(TSENSOR[index]);
@@ -111,16 +108,16 @@ void winteringModeChecking(float temperature)
     // Pass automatically in wintering mode if not already
     wintering = true; 
 
-    Serial.print(F("Enter wintering mode as water temperature < "));
-    Serial.print(MAX_WINTERING_TEMPERATURE);
-    Serial.println(F(" degC"));
+    if (DEBUG) Serial.print(F("Enter wintering mode as water temperature < "));
+    if (DEBUG) Serial.print(MAX_WINTERING_TEMPERATURE);
+    if (DEBUG) Serial.println(F(" degC"));
   } 
   else if (temperature >= MAX_WINTERING_TEMPERATURE && wintering)
   {
     // exit wintering mode
-    Serial.print(F("Exit wintering mode as water temperature >= "));
-    Serial.print(MAX_WINTERING_TEMPERATURE);
-    Serial.println(F(" degC"));
+    if (DEBUG) Serial.print(F("Exit wintering mode as water temperature >= "));
+    if (DEBUG) Serial.print(MAX_WINTERING_TEMPERATURE);
+    if (DEBUG) Serial.println(F(" degC"));
     wintering = false;
   }
   else if (temperature >= MAX_WINTERING_TEMPERATURE)
@@ -152,16 +149,16 @@ unsigned long operatingTime(float water_T, float air_T)
       divider = 4;
     }
   }
-  operating_time = (unsigned long) (water_T*MS_HOUR)/(divider);        // Divide temperature by 2 (or 3 during winter)
+  optime = (unsigned long) (water_T*MS_HOUR)/(divider);        // Divide temperature by 2 (or 3 during winter)
     
   // special situation during frozing air temperature
   if (air_T < FROST_TEMPERATURE)
   {
-    operating_time = MS_DAY;
+    optime = MS_DAY;
     frost_protection = true;
     if (!old_frost_flag)              // frost protection flag just set - printing only once. 
     {
-      Serial.println(F("FROST PROTECTION MODE - FORCE CONTINUOUS PUMP CIRCULATION!"));
+      if (DEBUG) Serial.println(F("FROST PROTECTION MODE - FORCE CONTINUOUS PUMP CIRCULATION!"));
     }
   }
   else
@@ -169,7 +166,7 @@ unsigned long operatingTime(float water_T, float air_T)
     frost_protection = false;
     if (old_frost_flag)      // frost protection flag just set - printing only once. 
     {
-      Serial.println(F("EXIT FROST PROTECTION MODE - RETURN TO NORMAL MODE!"));
+      if (DEBUG) Serial.println(F("EXIT FROST PROTECTION MODE - RETURN TO NORMAL MODE!"));
     }    
   }
 
@@ -179,27 +176,28 @@ unsigned long operatingTime(float water_T, float air_T)
     if (mode == 0) // OFF
     {
       // Stopped
-      if (operating_time != 0)
+      if (optime != 0)
       {      
-        operating_time = 0;
+        optime = 0;
       }
     }
     else if (mode == 2) // CONTINUOUS
     {
       if (operating_time != 2)
       { 
-        operating_time = MS_DAY;
+        optime = MS_DAY;
       }
     }    
   }
 
-  Serial.print(F("Total operating time per period of 24h is set to "));
-  Serial.print((float)operating_time/MS_HOUR);
-  Serial.print("h (");
-  Serial.print((float)operating_time*100/MS_DAY);
-  Serial.println("% of the time)");
-  
-  return operating_time;
+  if (DEBUG) {
+    Serial.print(F("Total operating time per period of 24h is set to "));
+    Serial.print((float)optime/MS_HOUR);
+    Serial.print("h (");
+    Serial.print((float)optime*100/MS_DAY);
+    Serial.println("% of the time)");
+  }
+  return optime;
 }
 
 void stopAllRelays(void)
@@ -210,24 +208,24 @@ void stopAllRelays(void)
 }
 
 unsigned int stop(int relay) {
-  Serial.print(F("Stop "));
-  Serial.print(RELAY[relay]);
-  Serial.print(F(" ... "));
-  digitalWrite(relay, STOPPED);
+  if (DEBUG) Serial.print(F("Stop "));
+  if (DEBUG) Serial.print(RELAY[relay]);
+  if (DEBUG) Serial.print(F(" ... "));
+  if (DEBUG) digitalWrite(relay, STOPPED);
   delay(1000);
   int state = digitalRead(relay);
-  Serial.println(STATUS[state]);
+  if (DEBUG) Serial.println(STATUS[state]);
   return state;
 }
 
 unsigned int start(int relay) {
-  Serial.print(F("Start "));
-  Serial.print(RELAY[relay]);
-  Serial.print(F(" ... "));
-  digitalWrite(relay, RUNNING);
+  if (DEBUG) Serial.print(F("Start "));
+  if (DEBUG) Serial.print(RELAY[relay]);
+  if (DEBUG) Serial.print(F(" ... "));
+  if (DEBUG) digitalWrite(relay, RUNNING);
   delay(1000);
   int state = digitalRead(relay);
-  Serial.println(STATUS[state]);
+  if (DEBUG) Serial.println(STATUS[state]);
   return state;
 }
 
@@ -245,8 +243,9 @@ void sendFeedback(EthernetClient client)
   client.println(F("HTTP/1.1 200 OK"));
   client.println(F("Content-Type: application/json; charset: utf-8"));
   client.println("Connection: close");  // the connection will be closed after completion of the response
-  // client.println("Refresh: 5");
-  client.println(F("Access-Control-Allow-Origin: *\n"));
+  client.println("Refresh: 5");
+  client.println(F("Access-Control-Allow-Origin: *"));
+  client.println("");
   
   // Puis on commence notre JSON par une accolade ouvrante
   client.println(F("{"));
@@ -281,6 +280,21 @@ void sendFeedback(EthernetClient client)
       client.println(F("\","));
     }
   }
+
+  // key opratingtime
+  client.print(F("\t\"operating_time\": "));
+  client.print(operating_time);
+  client.println(F(","));
+
+  // key periods
+  client.print(F("\t\"n_periods\": "));
+  client.print(NPERIODS);
+  client.println(F(","));
+
+  // key wintering
+  client.print(F("\t\"wintering\": "));
+  client.print(wintering);
+  client.println(F(","));
 
   // key frost
   client.print(F("\t\"frost_protection\": "));
@@ -320,14 +334,14 @@ void checkConnectedClient(void)
           interpreter(url); 
 
           // In all case, send a feedback to the client
-          sendFeedback(client);
-          delay(10);     
-          client.stop();    
+          sendFeedback(client);   
           break;
         }
             
       } 
-    } 
+    }
+    delay(1);     
+    client.stop();  
     
   }
 }
@@ -339,8 +353,10 @@ boolean interpreter(String url) {
   if (url.indexOf("mode=") > 0)
   {
     mode = url.substring(url.indexOf("mode=")+5, url.indexOf("mode=")+6).toInt();
-    Serial.print(F("mode = "));
-    Serial.println(MODES[mode]);
+    if (DEBUG) {
+      Serial.print(F("mode = "));
+      Serial.println(MODES[mode]);
+    }
     // recompute operating time
     operating_time = operatingTime(water_temperature, air_temperature);
     return true;
@@ -402,7 +418,7 @@ void updatePoolControl(unsigned long current_time)
   {
     water_temperature = getTemperature(INDEX_WATER_SENSOR, true);   
     air_temperature = getTemperature(INDEX_AIR_SENSOR, true);
-    operating_time = operatingTime(water_temperature, air_temperature)/NPERIODS;
+    operating_time = operatingTime(water_temperature, air_temperature);
   }
   
   // determine if we are in the period as in the last loop
@@ -415,19 +431,19 @@ void updatePoolControl(unsigned long current_time)
     starting_time = current_time;
     previous_pump_start = current_time;
     pump_working_time = 0;
-    
-    Serial.print(F("\n\n* Starting a new period ... "));
+    if (DEBUG)  Serial.print(F("\n\n* Starting a new period ... "));
   }
-  if (pump_working_time < operating_time)
+  if (pump_working_time < operating_time/NPERIODS)
   {
     pump_state = digitalRead(PUMP_RELAY);
     
     if (pump_state == STOPPED)
     { 
-      Serial.print(F("Pump must be working for a minimum duration of "));
-      printDuration(operating_time, period);
-      Serial.println(F(""));
-
+      if (DEBUG) {
+        Serial.print(F("Pump must be working for a minimum duration of "));
+        printDuration(operating_time/NPERIODS, period);
+        Serial.println(F(""));
+      }
       if (digitalRead(PUMP_RELAY) == STOPPED)
       {
         pump_state = start(PUMP_RELAY);   
@@ -441,7 +457,6 @@ void updatePoolControl(unsigned long current_time)
   {
     if (digitalRead(PUMP_RELAY) == RUNNING && !frost_protection)
     {
-      Serial.println(F(""));
       pump_state = stop(PUMP_RELAY);
       previous_pump_state = pump_state;
     }  
@@ -479,8 +494,6 @@ void updatePoolControl(unsigned long current_time)
       start(PH_RELAY);
     }
   }
-  Serial.print(F("."));
-
 }
 
 // **************************************************************************
@@ -492,11 +505,7 @@ void setup(void)
   // Start the Serial port for debugging
   Serial.begin(9600);
 
-  Serial.println(F("POOL CONTROLLER"));
-  Serial.println(F("***************\n"));
-
   // Initialize the ethernet card 
-  Serial.println(F("Ethernet card init..."));
   byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xA5, 0x7E };   // ethernet card MAC address of the shield (must be unique)
   char erreur = 0;
   erreur = Ethernet.begin(mac);
@@ -504,7 +513,7 @@ void setup(void)
   if (erreur == 0) 
   {
     Serial.println("DHCP initialisation failed. Try a static address.");
-    IPAddress ip(192,168,0,105);               
+    IPAddress ip(192,168,0,143);               
     Ethernet.begin(mac, ip);
   }
 
@@ -512,13 +521,14 @@ void setup(void)
   delay(1000);
 
   // Start the server (Listening on port 4200)
-  Serial.print(F("Start server with IP  "));
-  Serial.print(Ethernet.localIP());
-  Serial.println(F(":4200"));
+  if (DEBUG) {
+    Serial.print(F("Start server with IP  "));
+    Serial.print(Ethernet.localIP());
+    Serial.println(F(":4200"));
+  }
   server.begin();
     
   // Setup relays
-  Serial.println(F("\nInit relay state ..."));
   pinMode(PUMP_RELAY, OUTPUT);
   pinMode(ELECTROLYSE_RELAY, OUTPUT);
   pinMode(PH_RELAY, OUTPUT); 
@@ -526,9 +536,9 @@ void setup(void)
   // stopAllRelays();
 
   // Start up the sensor library 
-  Serial.println(F("\nStarting temperature measurements ..."));
   sensors.begin(); 
-
+  sensors.setResolution(TEMPERATURE_PRECISION);
+		
   // Read initial temperature
   water_temperature = getTemperature(INDEX_WATER_SENSOR, true);
   air_temperature = getTemperature(INDEX_AIR_SENSOR, true);
@@ -545,7 +555,7 @@ void setup(void)
   // Initialize start time for fitration period
   starting_time = millis();
 
-  Serial.print(F("\n\n* Starting a first period ... "));  
+  if (DEBUG) Serial.print(F("\n\n* Starting a first period ... "));  
   
 } 
 
